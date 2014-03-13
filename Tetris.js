@@ -1,4 +1,4 @@
-function shape (shape_rotations, colour, x=0, y=3, z=0) {
+function shape (shape_rotations, colour, x, y, z) {
    
    this.rotations = shape_rotations;
    this.colour = colour;
@@ -30,7 +30,7 @@ function shape (shape_rotations, colour, x=0, y=3, z=0) {
          }
          i++;
       }
-      return grid
+      return grid;
    }
    
    this.get_coords = function () {
@@ -60,6 +60,7 @@ function block () {
 function game_engine () {
 
    this.main_div = document.getElementById('main');
+   this.game_panel= document.getElementById('game_panel');
    this.canvas = document.getElementsByTagName("canvas")[0];
    this.ctx = this.canvas.getContext("2d");
    this.ctx.width = 300;
@@ -75,13 +76,11 @@ function game_engine () {
    this.cell_width = this.ctx.width / this.cols;
    this.cell_height = this.ctx.height / this.rows;
 
-   this.mino_queue = [];
-
    this.score_card = document.getElementById('score_sheet');
    this.game_score = document.getElementById('score');
-   this.level = 0;
-   this.score = 0;
+   
    this.points = [40, 100, 300, 1200];
+   this.level_up_reset = 10;
    
    this.shapes = [
      //degrees:    0       90      180     270
@@ -115,8 +114,6 @@ function game_engine () {
       return brd;
    }
 
-   this.board = this.build_board();
-
    this.random_mino = function () {
       
       if (this.mino_queue.length < 2) {
@@ -125,7 +122,10 @@ function game_engine () {
                this.mino_queue.push(
                   new shape(
                      this.shapes[j].rotations,
-                     this.shapes[j].colour
+                     this.shapes[j].colour,
+                     0,
+                     3,
+                     0
                   )
                );
             }
@@ -138,9 +138,20 @@ function game_engine () {
       )[0];
    }
 
-   this.current_shape = this.random_mino();
-   this.next_shape = this.random_mino();
-   
+	this.set_game_variables = function () {
+
+   	this.level = 0;
+   	this.level_up = this.level_up_reset;
+   	this.score = 0;
+   	this.mino_queue = [];
+   	this.board = this.build_board();
+		this.current_shape = this.random_mino();
+   	this.next_shape = this.random_mino();
+   	
+   }
+
+	this.set_game_variables();
+
    this.rotate = function () {
       
       var potential_rotation;
@@ -306,8 +317,18 @@ function game_engine () {
    }
 
    this.update_score = function(lines) {
+
 	   if(lines) {
 	      this.score += this.points[lines-1] * (this.level + 1);
+	      
+	      if (this.level_up - lines <= 0) {
+	      	this.level += 1;
+	      	this.increase_speed();
+	      	this.level_up = this.level_up_reset;
+			}
+			else {
+				this.level_up -= lines;
+			}
 	   }
    }
       
@@ -409,36 +430,71 @@ function game_engine () {
    
    this.render_score = function() {
 		
-		this.score_card = document.getElementById('score_sheet'); 
+		this.score_card = document.getElementById('score_sheet') 
 		this.game_score = document.getElementById('score');
 		
 		var newdiv = document.createElement('div');
-		var html = "<p id='score'>Score:" + this.score + "</p>";
+		var html = (
+			"<p id='score'>Score:" + this.score + 
+			"</br>Level:" + this.level +
+			"</br>Level up:" + this.level_up +
+			"</br>Speed:" + this.speed() +
+			"</p>"
+		);
 
 		newdiv.setAttribute('id', 'score_sheet');
-		newdiv.className = 'grid_4';
 		newdiv.innerHTML = html;
 
-		this.main_div.appendChild(newdiv);
-		this.main_div.removeChild(this.score_card);
+		this.game_panel.appendChild(newdiv);
+		this.game_panel.removeChild(this.score_card);
    }  
    
    this.game_tick = function() {
 
-      this.move_down();
-      this.clear_screen();
-      this.render_score();
-      this.render_board();     
+	   this.move_down();
+   	this.clear_screen();
+     	this.render_score();
+     	this.render_board();     
       this.render_piece();
 
    }
-  
+
+	this.speed = function () {
+		return 1000 - (33 * this.level);	
+	}
+
+	this.start_tick = function () {
+		temp = this
+		var rate = this.speed();
+		this.tick = window.setInterval(
+			function(){
+				temp.game_tick();
+			},
+			rate
+		);
+	}
+
+   this.increase_speed = function () {
+   	
+		var rate = this.speed();
+		if (rate > 0) {
+			window.clearInterval(this.tick);
+			this.tick = window.setInterval(
+				function(){
+					temp.game_tick();
+				},
+				rate
+			);
+		}
+   }
+ 
    this.lose =  function () {
 		alert("Lose!\nScore: " + this.score);    
-      location.reload();
+      this.set_game_variables();
+      window.clearInterval(this.tick);
+      this.start_tick();
    }
 }
-
 
 function game () {
    
@@ -447,14 +503,8 @@ function game () {
    engine.render_board();
    engine.render_piece();
    engine.render_next_piece();
-   
-   setInterval(
-      function () {
-      	engine.game_tick();
-      },
-      1000
-   );     
-
+   engine.start_tick();
+	
    document.onkeydown = function(event){
       event.preventDefault();
       switch(event.keyCode) {
@@ -470,11 +520,11 @@ function game () {
          case engine.keys.up:
             engine.rotate();
             break;
-         case engine.keys.space : 
+         case engine.keys.space: 
             engine.drop();
             break;
-         case this.keys.ESC: 
-            engine.lose();
+         case engine.keys.esc: 
+            alert("Pause");
             break;
          default:
             break;
@@ -483,6 +533,7 @@ function game () {
       engine.render_score();
       engine.render_board();     
       engine.render_piece();
+   	engine.render_next_piece();
    }    
 }
 
